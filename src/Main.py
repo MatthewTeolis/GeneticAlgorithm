@@ -20,10 +20,20 @@ class Node:
 class DNA:
     def __init__(self, strand):
         self.strand = strand
-        self.fitness = calculate_fitness(strand)
+        self.fitness = self.calculate_fitness()
     
     def __repr__(self):
         return '{' + f"{self.fitness} : {self.strand}" + '}'
+
+    def calculate_fitness(self):
+        total_distance = 0
+
+        for i in range(len(self.strand) - 1):
+            two_nodes = self.strand[i:i+2]
+            total_distance += distance_between_nodes(two_nodes[0], two_nodes[1])
+        total_distance += distance_between_nodes(self.strand[-1], self.strand[0])
+
+        return total_distance
 
 def generate_random_locations(number_of_locations):
     locations = []
@@ -32,8 +42,8 @@ def generate_random_locations(number_of_locations):
     return locations
 
 def generate_random_location(name =""):
-    x = random.randint(0, 300)
-    y = random.randint(0, 300)
+    x = random.randint(0, 1000)
+    y = random.randint(0, 1000)
     return Node(x, y, name)
 
 def generate_circle(num_points):
@@ -46,12 +56,6 @@ def generate_circle(num_points):
     return locations
 
 ### START ###
-
-population_size = 10
-num_locations = 15
-
-locations = generate_circle(num_locations)
-print('Locations: ', locations)
 
 def create_population(size, locations):
     pop = []
@@ -73,49 +77,43 @@ def create_one_dna_from(locations):
     return DNA(strand)
 
 def create_one_offspring(dna_1, dna_2):
-    split_point_1 = generate_random_index_in_strand(dna_1)
-    split_point_2 = generate_random_index_in_strand(dna_1)
-    crossover = dna_1[min(split_point_1, split_point_2) : max(split_point_1, split_point_2)]
+    split_point_1 = random.randint(0, len(dna_1.strand))
+    split_point_2 = random.randint(0, len(dna_1.strand))
+    crossover = dna_1.strand[min(split_point_1, split_point_2) : max(split_point_1, split_point_2)]
 
-    for i in dna_2:
+    for i in dna_2.strand:
         if i not in crossover:
             crossover.append(i)
 
-    return crossover
+    return DNA(crossover)
 
-def generate_random_index_in_strand(dna):
-    return random.randint(0, len(dna))
-
-def calculate_fitness(dna):
-    total_distance = 0
-    
-    for i in range(len(dna) - 1):
-        two_nodes = dna[i:i+2]
-        total_distance += distance_between_nodes(two_nodes[0], two_nodes[1])
-    total_distance += distance_between_nodes(dna[-1], dna[0])
-
-    return total_distance
+def mutate(dna):
+    point_1 = random.randint(0, len(dna.strand) - 1)
+    point_2 = random.randint(0, len(dna.strand) - 1)
+    tmp = dna.strand[point_1]
+    dna.strand[point_1] = dna.strand[point_2]
+    dna.strand[point_2] = tmp
+    return DNA(dna.strand)
 
 def distance_between_nodes(node_1, node_2):
     return math.hypot(node_2.x - node_1.x, node_2.y - node_1.y)
 
 def sort_population(pop):
-    return sorted(pop, key=lambda node: node.fitness)
+    return sorted(pop, key=lambda dna: dna.fitness)
 
 ## GRAPHING
 
-def generate_graph(locations, population):
-    plt.clear()
+def generate_graph(locations, best_child):
+    # plt.clear()
     graph = nx.Graph()
 
     for location in locations:
         graph.add_node(location.name, pos=location.get_location())
 
-    best_child = population[0]
-    for i in range(len(best_child) - 1):
-        s = best_child[i:i+2]
+    for i in range(len(best_child.strand) - 1):
+        s = best_child.strand[i:i+2]
         graph.add_edge(str(s[0]), str(s[1]))
-    graph.add_edge(str(best_child[-1]), str(best_child[0]))
+    graph.add_edge(str(best_child.strand[-1]), str(best_child.strand[0]))
 
     pos = nx.get_node_attributes(graph, "pos")
     nx.draw(graph, pos, with_labels=True)
@@ -139,11 +137,40 @@ def pprint(d):
 # Trim
 #####################################
 
+def next_gen(population):
+    population_size = len(population)
+    # mate
+    for i in population[:]:
+        if i != population[0]:
+            c1 = create_one_offspring(population[0], i)
+            c2 = create_one_offspring(i, population[0])
+            population.append(c1)
+            population.append(c2)
+            c1 = mutate(c1)
+            c2 = mutate(c2)
+            population.append(c1)
+            population.append(c2)
+
+    # sort
+    population = sort_population(population)
+
+    # cut
+    return population[:population_size]
+
+population_size = 100
+num_locations = 30
+
+locations = generate_random_locations(num_locations)
+print('Locations: ', locations)
+
 population = create_population(population_size, locations)
-for dna in population:
-    
-pprint(population)
-pprint(sort_population(population))
+for i in range(5000):
+    population = next_gen(population)
+    if i % 50 == 0:
+        generate_graph(locations, population[0])
+
+# pprint(population)
+# pprint(sort_population(population))
 # pprint.pprint(population[sorted(population)[0]])
 # for i in range(len(population)):
     # print('pop[', i ,']:', calculate_fitness(population[i]), "dna:", population[i])
